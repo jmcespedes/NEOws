@@ -99,8 +99,12 @@ def enviar_mensajes_pendientes():
 def index():
     return "Bot de envío activo."
 
-if __name__ == '__main__':
-    print("🚀 Iniciando bot...")
+
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
     while True:
         enviar_mensajes_pendientes()
-        time.sleep(15)  # cada 15 segundos
+        time.sleep(40)  # cada 15 segundos
