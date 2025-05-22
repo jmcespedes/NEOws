@@ -22,7 +22,7 @@ TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP = f"whatsapp:{os.getenv('TWILIO_PHONE_NUMBER')}"
 
 # Para depurar temporalmente:
-print("📦 TWILIO_WHATSAPP_NUMBER cargado:", TWILIO_WHATSAPP)
+print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
 
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
