@@ -87,6 +87,10 @@ def enviar_mensajes_pendientes():
                 )
                 print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
+                    print("FROM:", f"whatsapp:{TWILIO_WHATSAPP}")
+                    print("TO:", f"whatsapp:{telefono}")
+                    print("TWILIO_WHATSAPP:", TWILIO_WHATSAPP)
+                    print("telefono:", telefono)
                     message = client.messages.create(
                         body=mensaje,
                         from_=f"whatsapp:{TWILIO_WHATSAPP}",  
