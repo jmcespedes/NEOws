@@ -19,7 +19,7 @@ DB_CONFIG = {
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP = f"whatsapp:{os.getenv('TWILIO_WHATSAPP_NUMBER')}"
+TWILIO_WHATSAPP = f"whatsapp:{os.getenv('TWILIO_PHONE_NUMBER')}"
 
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
