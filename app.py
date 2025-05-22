@@ -111,18 +111,16 @@ def index():
 
 @app.route('/test-enviar')
 def test_enviar():
-    print("⚡ Ejecutando envío manual desde /test-enviar")
     enviar_mensajes_pendientes()
     return "✅ Envío ejecutado manualmente"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Iniciando aplicación en el puerto {port}...")
-
+    
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=enviar_mensajes_pendientes, trigger="interval", seconds=40)
     scheduler.start()
     print("⏰ Scheduler iniciado. Ejecutando cada 40 segundos.")
 
     app.run(host="0.0.0.0", port=port)
-
