@@ -63,9 +63,12 @@ def enviar_mensajes_pendientes():
             print(f"🏘️ Comuna detectada: {comuna_nombre}")
 
             cur.execute("""
-                SELECT nombre, telefono
-                FROM proveedores
-                WHERE comuna = %s AND servicio_id = %s
+                SELECT p.nombre, p.telefono
+                    FROM proveedores p
+                    JOIN comunas c ON p.comuna = c.nombre
+                    JOIN servicios s ON p.servicios = s.nombre
+                    WHERE c.id = %s
+                    AND s.id = %s
             """, (comuna_nombre, servicio_id))
             proveedores = cur.fetchall()
 
