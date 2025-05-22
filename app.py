@@ -67,7 +67,7 @@ def enviar_mensajes_pendientes():
                     FROM proveedores p
                     JOIN comunas c ON p.comuna = c.nombre
                     JOIN servicios s ON p.servicios = s.nombre
-                    WHERE c.id = %s
+                    WHERE c.nombre = %s
                     AND s.id = %s
             """, (comuna_nombre, servicio_id))
             proveedores = cur.fetchall()
