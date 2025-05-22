@@ -96,6 +96,7 @@ def enviar_mensajes_pendientes():
                         from_=f"whatsapp:{TWILIO_WHATSAPP}",  
                         to=f"whatsapp:{telefono}"
                     )
+                    
                     print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
                 except Exception as e:
                     print(f"❌ Error al enviar mensaje a {telefono}: {e}")
