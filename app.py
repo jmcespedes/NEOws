@@ -19,7 +19,7 @@ DB_CONFIG = {
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP = f"whatsapp:{os.getenv('TWILIO_PHONE_NUMBER')}"
+TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
 
 # Para depurar temporalmente:
 print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
