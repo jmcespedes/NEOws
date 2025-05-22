@@ -27,9 +27,6 @@ print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
 def get_db_connection():
-    print("🔌 Intentando conectar a la base de datos...")    
-    print("Configuración usada para conexión:", DB_CONFIG)
-
     conn = psycopg2.connect(**DB_CONFIG)
     print("✅ Conexión a la base de datos establecida.")
     return conn
