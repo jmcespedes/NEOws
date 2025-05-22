@@ -89,8 +89,9 @@ def enviar_mensajes_pendientes():
                 try:
                     message = client.messages.create(
                         body=mensaje,
-                        from_=TWILIO_WHATSAPP,
-                        to=f"whatsapp:{telefono}"
+                    body=mensaje,
+                    from_=f"whatsapp:{TWILIO_WHATSAPP}",  
+                    to=f"whatsapp:{telefono}"
                     )
                     print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
                 except Exception as e:
