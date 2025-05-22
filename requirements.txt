@@ -2,4 +2,5 @@ Flask
 psycopg2-binary 
 twilio 
 python-dotenv 
-apscheduler 
+apscheduler
+gunicorn
