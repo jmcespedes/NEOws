@@ -24,6 +24,8 @@ TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
 # Para depurar temporalmente:
 print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
 
+print("TWILIO_PHONE_NUMBER:", os.getenv("TWILIO_PHONE_NUMBER"))
+
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
 def get_db_connection():
