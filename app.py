@@ -74,6 +74,9 @@ def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_i
             ]
         }
     }
+
+    print("Payload enviado a Twilio:", json.dumps(data, indent=2))
+
     response = requests.post(
         url,
         data=json.dumps(data),
