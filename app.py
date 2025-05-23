@@ -1,11 +1,9 @@
 import os
 import psycopg2
-import requests
-from requests.auth import HTTPBasicAuth
+from twilio.rest import Client
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask
 from apscheduler.schedulers.background import BackgroundScheduler
-import json
 
 load_dotenv()
 
@@ -21,34 +19,19 @@ DB_CONFIG = {
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP = os.getenv('TWILIO_PHONE_NUMBER')
+TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
 
+# Para depurar temporalmente:
 print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
+
 print("TWILIO_PHONE_NUMBER:", os.getenv("TWILIO_PHONE_NUMBER"))
+
+client = Client(TWILIO_SID, TWILIO_AUTH)
 
 def get_db_connection():
     conn = psycopg2.connect(**DB_CONFIG)
     print("✅ Conexión a la base de datos establecida.")
     return conn
-
-def enviar_mensaje_simple(to_number, mensaje):
-    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
-    data = {
-        "To": f"whatsapp:{to_number}",
-        "From": f"whatsapp:{TWILIO_WHATSAPP}",
-        "Body": mensaje
-    }
-    headers = {'Content-Type': 'application/json'}
-    print("Payload simple:", json.dumps(data, indent=2))
-    response = requests.post(
-        url,
-        data=json.dumps(data),
-        headers=headers,
-        auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH)
-    )
-    print(f"Twilio API response: {response.status_code} {response.text}")
-    if response.status_code not in (200, 201):
-        raise Exception(f"Error al enviar mensaje: {response.text}")
 
 def enviar_mensajes_pendientes():
     try:
@@ -73,7 +56,6 @@ def enviar_mensajes_pendientes():
         for sesion_id, celular, comuna_id, servicio_id, pregunta_cliente in pendientes:
             print(f"\n➡️ Procesando sesión: {sesion_id}, celular: {celular}")
 
-            # Obtener nombre de la comuna
             cur.execute("SELECT nombre FROM comunas WHERE id = %s", (comuna_id,))
             comuna_result = cur.fetchone()
             if not comuna_result:
@@ -82,16 +64,6 @@ def enviar_mensajes_pendientes():
             comuna_nombre = comuna_result[0]
             print(f"🏘️ Comuna detectada: {comuna_nombre}")
 
-            # Obtener nombre del servicio
-            cur.execute("SELECT nombre FROM servicios WHERE id = %s", (servicio_id,))
-            servicio_result = cur.fetchone()
-            if not servicio_result:
-                print(f"⚠️ No se encontró servicio para ID {servicio_id}")
-                continue
-            servicio_nombre = servicio_result[0]
-            print(f"🛠️ Servicio detectado: {servicio_nombre}")
-
-            # Buscar proveedores
             cur.execute("""
                 SELECT p.nombre, p.telefono
                     FROM proveedores p
@@ -109,14 +81,23 @@ def enviar_mensajes_pendientes():
             print(f"📞 Se encontraron {len(proveedores)} proveedores para contactar.")
 
             for nombre_prov, telefono in proveedores:
+                mensaje = (
+                    f"👋 Hola {nombre_prov}, tienes una nueva solicitud en {comuna_nombre}:\n\n"
+                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}"
+                )
                 print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
-                    mensaje = f"👋 Hola {nombre_prov}, tienes una nueva solicitud en {comuna_nombre} para el servicio {servicio_nombre}.\n\n📝 {pregunta_cliente}\n📞 Contacto: {celular}"
-                    enviar_mensaje_simple(
-                        to_number=telefono,
-                        mensaje=mensaje
+                    print("FROM:", f"whatsapp:{TWILIO_WHATSAPP}")
+                    print("TO:", f"whatsapp:{telefono}")
+                    print("TWILIO_WHATSAPP:", TWILIO_WHATSAPP)
+                    print("telefono:", telefono)
+                    message = client.messages.create(
+                        body=mensaje,
+                        from_=f"whatsapp:{TWILIO_WHATSAPP}",  
+                        to=f"whatsapp:{telefono}"
                     )
-                    print(f"✅ Mensaje enviado exitosamente a {telefono}")
+
+                    print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
                 except Exception as e:
                     print(f"❌ Error al enviar mensaje a {telefono}: {e}")
 
@@ -145,84 +126,10 @@ def test_enviar():
     enviar_mensajes_pendientes()
     return "✅ Envío ejecutado manualmente"
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    try:
-        # Obtener datos de la solicitud
-        data = request.form
-        print("📩 Webhook recibido:", data)
-
-        # Obtener el número de teléfono del remitente (sin el prefijo whatsapp:)
-        from_number = data.get('From', '').replace('whatsapp:', '')
-
-        # Obtener el payload del botón (si existe)
-        button_payload = data.get('ButtonPayload', '')
-
-        # Si no hay payload, puede ser un mensaje de texto normal
-        if not button_payload:
-            return jsonify({"status": "success", "message": "No es una respuesta de botón"})
-
-        print(f"🔘 Botón presionado: {button_payload} por {from_number}")
-
-        # Verificar si es una respuesta "SI"
-        if button_payload.startswith('respuesta_si_'):
-            # Extraer el ID de sesión del payload
-            sesion_id = button_payload.replace('respuesta_si_', '')
-
-            # Actualizar la base de datos
-            conn = get_db_connection()
-            cur = conn.cursor()
-
-            # Verificar si la sesión existe
-            cur.execute("SELECT * FROM envios_whatsapp WHERE sesion_id = %s", (sesion_id,))
-            sesion = cur.fetchone()
-
-            if not sesion:
-                print(f"⚠️ No se encontró la sesión {sesion_id}")
-                cur.close()
-                conn.close()
-                return jsonify({"status": "error", "message": "Sesión no encontrada"})
-
-            # Actualizar la columna proveedor_acepta
-            cur.execute("""
-                UPDATE envios_whatsapp
-                SET proveedor_acepta = %s
-                WHERE sesion_id = %s
-            """, (from_number, sesion_id))
-
-            conn.commit()
-            cur.close()
-            conn.close()
-
-            print(f"✅ Base de datos actualizada: proveedor {from_number} aceptó la solicitud {sesion_id}")
-
-            # Enviar mensaje de confirmación al proveedor
-            try:
-                enviar_mensaje_simple(
-                    to_number=from_number,
-                    mensaje="Gracias, pronto el cliente te contactará."
-                )
-                print(f"✅ Mensaje de confirmación enviado a {from_number}")
-            except Exception as e:
-                print(f"❌ Error al enviar mensaje de confirmación: {e}")
-
-            return jsonify({"status": "success", "message": "Respuesta SI procesada correctamente"})
-
-        elif button_payload.startswith('respuesta_no_'):
-            # Aquí puedes agregar lógica para manejar respuestas "NO" si lo deseas
-            print(f"ℹ️ El proveedor {from_number} rechazó la solicitud")
-            return jsonify({"status": "success", "message": "Respuesta NO procesada correctamente"})
-
-        return jsonify({"status": "success", "message": "Webhook procesado correctamente"})
-
-    except Exception as e:
-        print(f"❌ Error en webhook: {e}")
-        return jsonify({"status": "error", "message": str(e)})
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Iniciando aplicación en el puerto {port}...")
-
+    
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=enviar_mensajes_pendientes, trigger="interval", seconds=40)
     scheduler.start()
