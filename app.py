@@ -34,6 +34,13 @@ def get_db_connection():
 def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_id):
     url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
     headers = {'Content-Type': 'application/json'}
+
+    print(f"DEBUG - to_number: '{to_number}'")
+    print(f"DEBUG - TWILIO_WHATSAPP: '{TWILIO_WHATSAPP}'")
+    print(f"DEBUG - comuna_nombre: '{comuna_nombre}'")
+    print(f"DEBUG - servicio_nombre: '{servicio_nombre}'")
+    print(f"DEBUG - sesion_id: '{sesion_id}'")
+
     data = {
         "To": f"whatsapp:{to_number}",
         "From": f"whatsapp:{TWILIO_WHATSAPP}",
