@@ -58,7 +58,7 @@ def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_i
                 {
                     "Type": "button",
                     "SubType": "quick_reply",
-                    "Index": "0",
+                    "Index": "1",
                     "Parameters": [
                         {"Type": "payload", "Payload": f"respuesta_si_{sesion_id}"}
                     ]
@@ -66,7 +66,7 @@ def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_i
                 {
                     "Type": "button",
                     "SubType": "quick_reply",
-                    "Index": "1",
+                    "Index": "2",
                     "Parameters": [
                         {"Type": "payload", "Payload": f"respuesta_no_{sesion_id}"}
                     ]
@@ -85,7 +85,7 @@ def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_i
     )
     
     print(f"Twilio API response: {response.status_code} {response.text}")
-    
+
     if response.status_code not in (200, 201):
         raise Exception(f"Error al enviar mensaje: {response.text}")
 
