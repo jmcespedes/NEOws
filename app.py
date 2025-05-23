@@ -121,10 +121,10 @@ def enviar_mensajes_pendientes():
 def index():
     return "Bot de envío activo."
 
-##@app.route('/test-enviar')
-##def test_enviar():
-##    enviar_mensajes_pendientes()
-##    return "✅ Envío ejecutado manualmente"
+@app.route('/test-enviar')
+def test_enviar():
+    enviar_mensajes_pendientes()
+    return "✅ Envío ejecutado manualmente"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
