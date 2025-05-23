@@ -23,7 +23,6 @@ TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
 
 # Para depurar temporalmente:
 print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
-
 print("TWILIO_PHONE_NUMBER:", os.getenv("TWILIO_PHONE_NUMBER"))
 
 client = Client(TWILIO_SID, TWILIO_AUTH)
@@ -56,6 +55,7 @@ def enviar_mensajes_pendientes():
         for sesion_id, celular, comuna_id, servicio_id, pregunta_cliente in pendientes:
             print(f"\n➡️ Procesando sesión: {sesion_id}, celular: {celular}")
 
+            # Obtener nombre de la comuna
             cur.execute("SELECT nombre FROM comunas WHERE id = %s", (comuna_id,))
             comuna_result = cur.fetchone()
             if not comuna_result:
@@ -64,6 +64,16 @@ def enviar_mensajes_pendientes():
             comuna_nombre = comuna_result[0]
             print(f"🏘️ Comuna detectada: {comuna_nombre}")
 
+            # Obtener nombre del servicio
+            cur.execute("SELECT nombre FROM servicios WHERE id = %s", (servicio_id,))
+            servicio_result = cur.fetchone()
+            if not servicio_result:
+                print(f"⚠️ No se encontró servicio para ID {servicio_id}")
+                continue
+            servicio_nombre = servicio_result[0]
+            print(f"🛠️ Servicio detectado: {servicio_nombre}")
+
+            # Buscar proveedores
             cur.execute("""
                 SELECT p.nombre, p.telefono
                     FROM proveedores p
@@ -81,22 +91,28 @@ def enviar_mensajes_pendientes():
             print(f"📞 Se encontraron {len(proveedores)} proveedores para contactar.")
 
             for nombre_prov, telefono in proveedores:
-                mensaje = (
-                    f"👋 Hola {nombre_prov}, tienes una nueva solicitud en {comuna_nombre}:\n\n"
-                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}"
-                )
                 print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
                     print("FROM:", f"whatsapp:{TWILIO_WHATSAPP}")
                     print("TO:", f"whatsapp:{telefono}")
-                    print("TWILIO_WHATSAPP:", TWILIO_WHATSAPP)
-                    print("telefono:", telefono)
+                    # Enviar usando plantilla con variables
                     message = client.messages.create(
-                        body=mensaje,
-                        from_=f"whatsapp:{TWILIO_WHATSAPP}",  
-                        to=f"whatsapp:{telefono}"
+                        from_=f"whatsapp:{TWILIO_WHATSAPP}",
+                        to=f"whatsapp:{telefono}",
+                        template={
+                            'name': 'neo_proveedor',
+                            'language_code': 'es',
+                            'components': [
+                                {
+                                    'type': 'body',
+                                    'parameters': [
+                                        {'type': 'text', 'text': comuna_nombre},      # {{1}}
+                                        {'type': 'text', 'text': servicio_nombre}     # {{2}}
+                                    ]
+                                }
+                            ]
+                        }
                     )
-
                     print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
                 except Exception as e:
                     print(f"❌ Error al enviar mensaje a {telefono}: {e}")
@@ -129,7 +145,7 @@ def test_enviar():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Iniciando aplicación en el puerto {port}...")
-    
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=enviar_mensajes_pendientes, trigger="interval", seconds=40)
     scheduler.start()
