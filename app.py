@@ -83,7 +83,9 @@ def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_i
         headers=headers,
         auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH)
     )
+    
     print(f"Twilio API response: {response.status_code} {response.text}")
+    
     if response.status_code not in (200, 201):
         raise Exception(f"Error al enviar mensaje: {response.text}")
 
