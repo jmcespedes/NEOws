@@ -161,6 +161,7 @@ def enviar_mensajes_pendientes():
             for nombre_prov, telefono in proveedores:
                 print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
+                    print(f"Intentando enviar AAAAAAAAAAAAAAAAAAAAAAA: {nombre_prov} - {telefono}")
                     enviar_template_whatsapp(
                         to_number=telefono,
                         comuna_nombre=comuna_nombre,
