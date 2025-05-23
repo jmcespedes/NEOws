@@ -96,7 +96,7 @@ def enviar_mensajes_pendientes():
                         from_=f"whatsapp:{TWILIO_WHATSAPP}",  
                         to=f"whatsapp:{telefono}"
                     )
-                    
+
                     print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
                 except Exception as e:
                     print(f"❌ Error al enviar mensaje a {telefono}: {e}")
@@ -121,10 +121,10 @@ def enviar_mensajes_pendientes():
 def index():
     return "Bot de envío activo."
 
-@app.route('/test-enviar')
-def test_enviar():
-    enviar_mensajes_pendientes()
-    return "✅ Envío ejecutado manualmente"
+##@app.route('/test-enviar')
+##def test_enviar():
+##    enviar_mensajes_pendientes()
+##    return "✅ Envío ejecutado manualmente"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
