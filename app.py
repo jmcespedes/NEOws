@@ -31,64 +31,6 @@ def get_db_connection():
     print("✅ Conexión a la base de datos establecida.")
     return conn
 
-def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_id):
-    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
-    headers = {'Content-Type': 'application/json'}
-
-    print(f"DEBUG - to_number: '{to_number}'")
-    print(f"DEBUG - TWILIO_WHATSAPP: '{TWILIO_WHATSAPP}'")
-    print(f"DEBUG - comuna_nombre: '{comuna_nombre}'")
-    print(f"DEBUG - servicio_nombre: '{servicio_nombre}'")
-    print(f"DEBUG - sesion_id: '{sesion_id}'")
-
-    data = {
-        "To": f"whatsapp:{to_number}",
-        "From": f"whatsapp:{TWILIO_WHATSAPP}",
-        "Template": {
-            "Name": "neo_proveedor",
-            "Language": "es",
-            "Components": [
-                {
-                    "Type": "body",
-                    "Parameters": [
-                        {"Type": "text", "Text": comuna_nombre},   # {{1}}
-                        {"Type": "text", "Text": servicio_nombre}  # {{2}}
-                    ]
-                },
-                {
-                    "Type": "button",
-                    "SubType": "quick_reply",
-                    "Index": "1",
-                    "Parameters": [
-                        {"Type": "payload", "Payload": f"respuesta_si_{sesion_id}"}
-                    ]
-                },
-                {
-                    "Type": "button",
-                    "SubType": "quick_reply",
-                    "Index": "2",
-                    "Parameters": [
-                        {"Type": "payload", "Payload": f"respuesta_no_{sesion_id}"}
-                    ]
-                }
-            ]
-        }
-    }
-
-    print("Payload enviado a Twilio:", json.dumps(data, indent=2))
-
-    response = requests.post(
-        url,
-        data=json.dumps(data),
-        headers=headers,
-        auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH)
-    )
-    
-    print(f"Twilio API response: {response.status_code} {response.text}")
-
-    if response.status_code not in (200, 201):
-        raise Exception(f"Error al enviar mensaje: {response.text}")
-
 def enviar_mensaje_simple(to_number, mensaje):
     url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
     data = {
@@ -96,9 +38,12 @@ def enviar_mensaje_simple(to_number, mensaje):
         "From": f"whatsapp:{TWILIO_WHATSAPP}",
         "Body": mensaje
     }
+    headers = {'Content-Type': 'application/json'}
+    print("Payload simple:", json.dumps(data, indent=2))
     response = requests.post(
         url,
-        data=data,
+        data=json.dumps(data),
+        headers=headers,
         auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH)
     )
     print(f"Twilio API response: {response.status_code} {response.text}")
@@ -166,12 +111,10 @@ def enviar_mensajes_pendientes():
             for nombre_prov, telefono in proveedores:
                 print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
-                    print(f"Intentando enviar AAAAAAAAAAAAAAAAAAAAAAA: {nombre_prov} - {telefono}")
-                    enviar_template_whatsapp(
+                    mensaje = f"👋 Hola {nombre_prov}, tienes una nueva solicitud en {comuna_nombre} para el servicio {servicio_nombre}.\n\n📝 {pregunta_cliente}\n📞 Contacto: {celular}"
+                    enviar_mensaje_simple(
                         to_number=telefono,
-                        comuna_nombre=comuna_nombre,
-                        servicio_nombre=servicio_nombre,
-                        sesion_id=sesion_id
+                        mensaje=mensaje
                     )
                     print(f"✅ Mensaje enviado exitosamente a {telefono}")
                 except Exception as e:
