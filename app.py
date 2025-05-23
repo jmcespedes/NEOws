@@ -1,9 +1,11 @@
 import os
 import psycopg2
-from twilio.rest import Client
+import requests
+from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
+import json
 
 load_dotenv()
 
@@ -19,18 +21,77 @@ DB_CONFIG = {
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
+TWILIO_WHATSAPP = os.getenv('TWILIO_PHONE_NUMBER')
 
-# Para depurar temporalmente:
 print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
 print("TWILIO_PHONE_NUMBER:", os.getenv("TWILIO_PHONE_NUMBER"))
-
-client = Client(TWILIO_SID, TWILIO_AUTH)
 
 def get_db_connection():
     conn = psycopg2.connect(**DB_CONFIG)
     print("✅ Conexión a la base de datos establecida.")
     return conn
+
+def enviar_template_whatsapp(to_number, comuna_nombre, servicio_nombre, sesion_id):
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "To": f"whatsapp:{to_number}",
+        "From": f"whatsapp:{TWILIO_WHATSAPP}",
+        "Template": {
+            "Name": "neo_proveedor",
+            "Language": "es",
+            "Components": [
+                {
+                    "Type": "body",
+                    "Parameters": [
+                        {"Type": "text", "Text": comuna_nombre},   # {{1}}
+                        {"Type": "text", "Text": servicio_nombre}  # {{2}}
+                    ]
+                },
+                {
+                    "Type": "button",
+                    "SubType": "quick_reply",
+                    "Index": "0",
+                    "Parameters": [
+                        {"Type": "payload", "Payload": f"respuesta_si_{sesion_id}"}
+                    ]
+                },
+                {
+                    "Type": "button",
+                    "SubType": "quick_reply",
+                    "Index": "1",
+                    "Parameters": [
+                        {"Type": "payload", "Payload": f"respuesta_no_{sesion_id}"}
+                    ]
+                }
+            ]
+        }
+    }
+    response = requests.post(
+        url,
+        data=json.dumps(data),
+        headers=headers,
+        auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH)
+    )
+    print(f"Twilio API response: {response.status_code} {response.text}")
+    if response.status_code not in (200, 201):
+        raise Exception(f"Error al enviar mensaje: {response.text}")
+
+def enviar_mensaje_simple(to_number, mensaje):
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
+    data = {
+        "To": f"whatsapp:{to_number}",
+        "From": f"whatsapp:{TWILIO_WHATSAPP}",
+        "Body": mensaje
+    }
+    response = requests.post(
+        url,
+        data=data,
+        auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH)
+    )
+    print(f"Twilio API response: {response.status_code} {response.text}")
+    if response.status_code not in (200, 201):
+        raise Exception(f"Error al enviar mensaje: {response.text}")
 
 def enviar_mensajes_pendientes():
     try:
@@ -93,27 +154,13 @@ def enviar_mensajes_pendientes():
             for nombre_prov, telefono in proveedores:
                 print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
-                    print("FROM:", f"whatsapp:{TWILIO_WHATSAPP}")
-                    print("TO:", f"whatsapp:{telefono}")
-                    # Enviar usando plantilla con variables
-                    message = client.messages.create(
-                        from_=f"whatsapp:{TWILIO_WHATSAPP}",
-                        to=f"whatsapp:{telefono}",
-                        template={
-                            'name': 'neo_proveedor',
-                            'language_code': 'es',
-                            'components': [
-                                {
-                                    'type': 'body',
-                                    'parameters': [
-                                        {'type': 'text', 'text': comuna_nombre},      # {{1}}
-                                        {'type': 'text', 'text': servicio_nombre}     # {{2}}
-                                    ]
-                                }
-                            ]
-                        }
+                    enviar_template_whatsapp(
+                        to_number=telefono,
+                        comuna_nombre=comuna_nombre,
+                        servicio_nombre=servicio_nombre,
+                        sesion_id=sesion_id
                     )
-                    print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
+                    print(f"✅ Mensaje enviado exitosamente a {telefono}")
                 except Exception as e:
                     print(f"❌ Error al enviar mensaje a {telefono}: {e}")
 
@@ -141,6 +188,80 @@ def index():
 def test_enviar():
     enviar_mensajes_pendientes()
     return "✅ Envío ejecutado manualmente"
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    try:
+        # Obtener datos de la solicitud
+        data = request.form
+        print("📩 Webhook recibido:", data)
+
+        # Obtener el número de teléfono del remitente (sin el prefijo whatsapp:)
+        from_number = data.get('From', '').replace('whatsapp:', '')
+
+        # Obtener el payload del botón (si existe)
+        button_payload = data.get('ButtonPayload', '')
+
+        # Si no hay payload, puede ser un mensaje de texto normal
+        if not button_payload:
+            return jsonify({"status": "success", "message": "No es una respuesta de botón"})
+
+        print(f"🔘 Botón presionado: {button_payload} por {from_number}")
+
+        # Verificar si es una respuesta "SI"
+        if button_payload.startswith('respuesta_si_'):
+            # Extraer el ID de sesión del payload
+            sesion_id = button_payload.replace('respuesta_si_', '')
+
+            # Actualizar la base de datos
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Verificar si la sesión existe
+            cur.execute("SELECT * FROM envios_whatsapp WHERE sesion_id = %s", (sesion_id,))
+            sesion = cur.fetchone()
+
+            if not sesion:
+                print(f"⚠️ No se encontró la sesión {sesion_id}")
+                cur.close()
+                conn.close()
+                return jsonify({"status": "error", "message": "Sesión no encontrada"})
+
+            # Actualizar la columna proveedor_acepta
+            cur.execute("""
+                UPDATE envios_whatsapp
+                SET proveedor_acepta = %s
+                WHERE sesion_id = %s
+            """, (from_number, sesion_id))
+
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            print(f"✅ Base de datos actualizada: proveedor {from_number} aceptó la solicitud {sesion_id}")
+
+            # Enviar mensaje de confirmación al proveedor
+            try:
+                enviar_mensaje_simple(
+                    to_number=from_number,
+                    mensaje="Gracias, pronto el cliente te contactará."
+                )
+                print(f"✅ Mensaje de confirmación enviado a {from_number}")
+            except Exception as e:
+                print(f"❌ Error al enviar mensaje de confirmación: {e}")
+
+            return jsonify({"status": "success", "message": "Respuesta SI procesada correctamente"})
+
+        elif button_payload.startswith('respuesta_no_'):
+            # Aquí puedes agregar lógica para manejar respuestas "NO" si lo deseas
+            print(f"ℹ️ El proveedor {from_number} rechazó la solicitud")
+            return jsonify({"status": "success", "message": "Respuesta NO procesada correctamente"})
+
+        return jsonify({"status": "success", "message": "Webhook procesado correctamente"})
+
+    except Exception as e:
+        print(f"❌ Error en webhook: {e}")
+        return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
