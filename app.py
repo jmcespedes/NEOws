@@ -75,8 +75,7 @@ def enviar_mensajes_pendientes():
 
             for nombre_prov, telefono in proveedores:
                 mensaje = (
-                    f"👋 Hola {nombre_prov}, Soy de NEOServicios. Tienes una nueva solicitud en {comuna_nombre}:\n\n"
-                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}\n\n"
+                    f"👋 Hola {nombre_prov}, Soy de NEOServicios. Tienes una nueva solicitud de {servicio_id} en {comuna_nombre}:\n\n"                    
                     f"¿Deseas tomar el servicio? Responde con SÍ o NO."
                 )
                 try:
