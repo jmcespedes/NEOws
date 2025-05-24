@@ -58,7 +58,6 @@ def enviar_mensajes_pendientes():
                 print(f"⚠️ No se encontró comuna para ID {comuna_id}")
                 continue
             comuna_nombre = comuna_result[0]
-            print(f"🏘️ Comuna detectada: {comuna_nombre}")
 
             cur.execute("""
                 SELECT p.nombre, p.telefono
@@ -74,14 +73,11 @@ def enviar_mensajes_pendientes():
                 print(f"⚠️ No hay proveedores en {comuna_nombre} para el servicio {servicio_id}")
                 continue
 
-            print(f"📞 Se encontraron {len(proveedores)} proveedores para contactar.")
-
             for nombre_prov, telefono in proveedores:
                 mensaje = (
-                    f"👋 Hola {nombre_prov}, soy de *NEOServicios*.\n"
-                    f"Tienes una nueva solicitud en *{comuna_nombre}*:\n\n"
+                    f"👋 Hola {nombre_prov}, Soy de NEOServicios. Tienes una nueva solicitud en {comuna_nombre}:\n\n"
                     f"📝 {pregunta_cliente}\n📞 Contacto: {celular}\n\n"
-                    f"¿Deseas tomar esta solicitud? Responde *sí* o *no*."
+                    f"¿Deseas tomar el servicio? Responde con SÍ o NO."
                 )
                 try:
                     client.messages.create(
@@ -91,7 +87,7 @@ def enviar_mensajes_pendientes():
                     )
                     print(f"✅ Mensaje enviado a {telefono}")
                 except Exception as e:
-                    print(f"❌ Error al enviar a {telefono}: {e}")
+                    print(f"❌ Error al enviar mensaje a {telefono}: {e}")
 
             cur.execute("""
                 UPDATE envios_whatsapp
@@ -99,14 +95,13 @@ def enviar_mensajes_pendientes():
                 WHERE sesion_id = %s
             """, (sesion_id,))
             conn.commit()
-            print("✅ Registro marcado como enviado.")
 
         cur.close()
         conn.close()
         print("🔒 Conexión cerrada.\n")
 
     except Exception as e:
-        print("❌ Error general:", e)
+        print("❌ Error general en enviar_mensajes_pendientes:", e)
 
 @app.route('/')
 def index():
@@ -117,49 +112,58 @@ def test_enviar():
     enviar_mensajes_pendientes()
     return "✅ Envío ejecutado manualmente"
 
-@app.route("/webhook-respuesta", methods=["POST"])
-def webhook_respuesta():
-    from_number = request.form.get("From", "").replace("whatsapp:", "")
-    body = request.form.get("Body", "").strip().lower()
+@app.route('/whatsapp-incoming', methods=['POST'])
+def whatsapp_incoming():
+    incoming_msg = request.values.get('Body', '').strip().lower()
+    from_number = request.values.get('From', '').replace('whatsapp:', '')
+
+    print(f"📨 Mensaje recibido: {incoming_msg} desde {from_number}")
+
+    if incoming_msg not in ['si', 'sí', 'no']:
+        return "⚠️ Por favor, responde solo con SÍ o NO.", 200
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    if body not in ["sí", "si", "no"]:
-        client.messages.create(
-            body="❌ Por favor responde solo con *sí* o *no*.",
-            from_=f"whatsapp:{TWILIO_WHATSAPP}",
-            to=f"whatsapp:{from_number}"
-        )
-        return "❌ Respuesta inválida", 200
-
+    # Buscar la sesión pendiente del proveedor
     cur.execute("""
-        SELECT ew.sesion_id, ew.celular, c.nombre
-        FROM envios_whatsapp ew
-        JOIN comunas c ON ew.comuna_id = c.id
-        WHERE ew.enviado_proveedores = TRUE
-          AND ew.proveedor_acepta IS NULL
-        ORDER BY ew.created_at ASC
+        SELECT sesion_id, celular, comuna_id
+        FROM envios_whatsapp
+        WHERE enviado_proveedores = TRUE
+          AND proveedor_acepta IS NULL
+        ORDER BY created_at DESC
         LIMIT 1
     """)
-    resultado = cur.fetchone()
+    row = cur.fetchone()
 
-    if not resultado:
-        return "📭 No hay sesión pendiente.", 200
+    if not row:
+        cur.close()
+        conn.close()
+        return "⚠️ No hay solicitudes pendientes para este número.", 200
 
-    sesion_id, celular_cliente, comuna_nombre = resultado
+    sesion_id, celular_cliente, comuna_id = row
 
-    if body in ["sí", "si"]:
-        mensaje_confirmacion = (
+    if incoming_msg in ['si', 'sí']:
+        # Obtener comuna
+        cur.execute("SELECT nombre FROM comunas WHERE id = %s", (comuna_id,))
+        comuna_nombre = cur.fetchone()[0]
+
+        # Enviar mensaje al proveedor con datos del cliente
+        mensaje_contacto = (
             f"✅ Gracias por aceptar. Aquí están los datos del cliente:\n"
-            f"📞 {celular_cliente}\n📍 Comuna: {comuna_nombre}"
+            f"📍 Comuna: {comuna_nombre}\n📞 Contacto: {celular_cliente}"
         )
-        client.messages.create(
-            body=mensaje_confirmacion,
-            from_=f"whatsapp:{TWILIO_WHATSAPP}",
-            to=f"whatsapp:{from_number}"
-        )
+        try:
+            client.messages.create(
+                body=mensaje_contacto,
+                from_=f"whatsapp:{TWILIO_WHATSAPP}",
+                to=f"whatsapp:{from_number}"
+            )
+            print(f"📤 Mensaje de contacto enviado a {from_number}")
+        except Exception as e:
+            print(f"❌ Error al enviar datos de cliente: {e}")
 
+        # Actualizar en base de datos
         cur.execute("""
             UPDATE envios_whatsapp
             SET proveedor_acepta = 'SI',
@@ -167,21 +171,21 @@ def webhook_respuesta():
             WHERE sesion_id = %s
         """, (from_number, sesion_id))
         conn.commit()
-        print(f"📝 Proveedor {from_number} aceptó la sesión {sesion_id}.")
-    else:
-        print(f"🚫 Proveedor {from_number} rechazó la solicitud.")
+
+    elif incoming_msg == 'no':
+        print("🚫 Proveedor no aceptó la solicitud.")
 
     cur.close()
     conn.close()
-    return "✅ Procesado", 200
+    return "✅ Respuesta procesada correctamente.", 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Iniciando en el puerto {port}...")
+    print(f"🚀 Iniciando aplicación en el puerto {port}...")
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=enviar_mensajes_pendientes, trigger="interval", seconds=40)
     scheduler.start()
-    print("⏰ Scheduler activo (cada 40 segundos).")
+    print("⏰ Scheduler iniciado. Ejecutando cada 40 segundos.")
 
     app.run(host="0.0.0.0", port=port)
