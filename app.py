@@ -60,7 +60,7 @@ def enviar_mensajes_pendientes():
             comuna_nombre = comuna_result[0]
 
             cur.execute("""
-                SELECT p.nombre, p.telefono
+                SELECT p.nombre, p.telefono, s.nombre as nombre_servicio
                 FROM proveedores p
                 JOIN comunas c ON p.comuna = c.nombre
                 JOIN servicios s ON p.servicios = s.nombre
@@ -73,10 +73,11 @@ def enviar_mensajes_pendientes():
                 print(f"⚠️ No hay proveedores en {comuna_nombre} para el servicio {servicio_id}")
                 continue
 
-            for nombre_prov, telefono in proveedores:
+            for nombre_prov, telefono, nombre_servicio in proveedores:
                 mensaje = (
-                    f"👋 Hola {nombre_prov}, Soy de NEOServicios. Tienes una nueva solicitud de {servicio_id} en {comuna_nombre}:\n\n"                    
-                    f"¿Deseas tomar el servicio? Responde con SÍ o NO."
+                    f"👋 Hola {nombre_prov}, soy de NEOServicios. Tienes una nueva solicitud del servicio *{nombre_servicio}* en *{comuna_nombre}*:\n\n"
+                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}\n\n"
+                    f"¿Deseas tomar el servicio? Responde con *SÍ* o *NO*."
                 )
                 try:
                     client.messages.create(
