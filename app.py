@@ -76,7 +76,6 @@ def enviar_mensajes_pendientes():
             for nombre_prov, telefono, nombre_servicio in proveedores:
                 mensaje = (
                     f"👋 Hola {nombre_prov}, soy de NEOServicios. Tienes una nueva solicitud del servicio *{nombre_servicio}* en *{comuna_nombre}*:\n\n"
-                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}\n\n"
                     f"¿Deseas tomar el servicio? Responde con *SÍ* o *NO*."
                 )
                 try:
@@ -150,7 +149,7 @@ def whatsapp_incoming():
 
         # Enviar mensaje al proveedor con datos del cliente
         mensaje_contacto = (
-            f"✅ Gracias por aceptar. Aquí están los datos del cliente:\n"
+            f"✅ Gracias por aceptar. Aquí están los datos del cliente, por favor contactalo lo antes posible:\n"
             f"📍 Comuna: {comuna_nombre}\n📞 Contacto: {celular_cliente}"
         )
         try:
