@@ -2,7 +2,7 @@ import os
 import psycopg2
 from twilio.rest import Client
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request
 from apscheduler.schedulers.background import BackgroundScheduler
 
 load_dotenv()
@@ -20,11 +20,6 @@ DB_CONFIG = {
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
-
-# Para depurar temporalmente:
-print("📦 TWILIO_PHONE_NUMBER cargado:", TWILIO_WHATSAPP)
-
-print("TWILIO_PHONE_NUMBER:", os.getenv("TWILIO_PHONE_NUMBER"))
 
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
@@ -44,6 +39,7 @@ def enviar_mensajes_pendientes():
             FROM envios_whatsapp
             WHERE pregunta_cliente IS NOT NULL
               AND enviado_proveedores = FALSE
+              AND proveedor_acepta IS NULL
             LIMIT 5
         """)
         pendientes = cur.fetchall()
@@ -66,11 +62,11 @@ def enviar_mensajes_pendientes():
 
             cur.execute("""
                 SELECT p.nombre, p.telefono
-                    FROM proveedores p
-                    JOIN comunas c ON p.comuna = c.nombre
-                    JOIN servicios s ON p.servicios = s.nombre
-                    WHERE c.nombre = %s
-                    AND s.id = %s
+                FROM proveedores p
+                JOIN comunas c ON p.comuna = c.nombre
+                JOIN servicios s ON p.servicios = s.nombre
+                WHERE c.nombre = %s
+                  AND s.id = %s
             """, (comuna_nombre, servicio_id))
             proveedores = cur.fetchall()
 
@@ -82,40 +78,35 @@ def enviar_mensajes_pendientes():
 
             for nombre_prov, telefono in proveedores:
                 mensaje = (
-                    f"👋 Hola {nombre_prov}, tienes una nueva solicitud en {comuna_nombre}:\n\n"
-                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}"
+                    f"👋 Hola {nombre_prov}, soy de *NEOServicios*.\n"
+                    f"Tienes una nueva solicitud en *{comuna_nombre}*:\n\n"
+                    f"📝 {pregunta_cliente}\n📞 Contacto: {celular}\n\n"
+                    f"¿Deseas tomar esta solicitud? Responde *sí* o *no*."
                 )
-                print(f"📤 Enviando mensaje a {nombre_prov} ({telefono})...")
                 try:
-                    print("FROM:", f"whatsapp:{TWILIO_WHATSAPP}")
-                    print("TO:", f"whatsapp:{telefono}")
-                    print("TWILIO_WHATSAPP:", TWILIO_WHATSAPP)
-                    print("telefono:", telefono)
-                    message = client.messages.create(
+                    client.messages.create(
                         body=mensaje,
-                        from_=f"whatsapp:{TWILIO_WHATSAPP}",  
+                        from_=f"whatsapp:{TWILIO_WHATSAPP}",
                         to=f"whatsapp:{telefono}"
                     )
-
-                    print(f"✅ Mensaje enviado exitosamente (SID: {message.sid})")
+                    print(f"✅ Mensaje enviado a {telefono}")
                 except Exception as e:
-                    print(f"❌ Error al enviar mensaje a {telefono}: {e}")
+                    print(f"❌ Error al enviar a {telefono}: {e}")
 
-            print(f"🔄 Marcando mensaje como enviado para sesión {sesion_id}...")
             cur.execute("""
                 UPDATE envios_whatsapp
                 SET enviado_proveedores = TRUE
                 WHERE sesion_id = %s
             """, (sesion_id,))
             conn.commit()
-            print("✅ Registro actualizado.")
+            print("✅ Registro marcado como enviado.")
 
         cur.close()
         conn.close()
         print("🔒 Conexión cerrada.\n")
 
     except Exception as e:
-        print("❌ Error general en la función enviar_mensajes_pendientes:", e)
+        print("❌ Error general:", e)
 
 @app.route('/')
 def index():
@@ -126,13 +117,71 @@ def test_enviar():
     enviar_mensajes_pendientes()
     return "✅ Envío ejecutado manualmente"
 
+@app.route("/webhook-respuesta", methods=["POST"])
+def webhook_respuesta():
+    from_number = request.form.get("From", "").replace("whatsapp:", "")
+    body = request.form.get("Body", "").strip().lower()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if body not in ["sí", "si", "no"]:
+        client.messages.create(
+            body="❌ Por favor responde solo con *sí* o *no*.",
+            from_=f"whatsapp:{TWILIO_WHATSAPP}",
+            to=f"whatsapp:{from_number}"
+        )
+        return "❌ Respuesta inválida", 200
+
+    cur.execute("""
+        SELECT ew.sesion_id, ew.celular, c.nombre
+        FROM envios_whatsapp ew
+        JOIN comunas c ON ew.comuna_id = c.id
+        WHERE ew.enviado_proveedores = TRUE
+          AND ew.proveedor_acepta IS NULL
+        ORDER BY ew.created_at ASC
+        LIMIT 1
+    """)
+    resultado = cur.fetchone()
+
+    if not resultado:
+        return "📭 No hay sesión pendiente.", 200
+
+    sesion_id, celular_cliente, comuna_nombre = resultado
+
+    if body in ["sí", "si"]:
+        mensaje_confirmacion = (
+            f"✅ Gracias por aceptar. Aquí están los datos del cliente:\n"
+            f"📞 {celular_cliente}\n📍 Comuna: {comuna_nombre}"
+        )
+        client.messages.create(
+            body=mensaje_confirmacion,
+            from_=f"whatsapp:{TWILIO_WHATSAPP}",
+            to=f"whatsapp:{from_number}"
+        )
+
+        cur.execute("""
+            UPDATE envios_whatsapp
+            SET proveedor_acepta = 'SI',
+                celular_proveedor = %s
+            WHERE sesion_id = %s
+        """, (from_number, sesion_id))
+        conn.commit()
+        print(f"📝 Proveedor {from_number} aceptó la sesión {sesion_id}.")
+    else:
+        print(f"🚫 Proveedor {from_number} rechazó la solicitud.")
+
+    cur.close()
+    conn.close()
+    return "✅ Procesado", 200
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Iniciando aplicación en el puerto {port}...")
-    
+    print(f"🚀 Iniciando en el puerto {port}...")
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=enviar_mensajes_pendientes, trigger="interval", seconds=40)
     scheduler.start()
-    print("⏰ Scheduler iniciado. Ejecutando cada 40 segundos.")
+    print("⏰ Scheduler activo (cada 40 segundos).")
 
     app.run(host="0.0.0.0", port=port)
