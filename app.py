@@ -137,7 +137,7 @@ def whatsapp_incoming():
 
     print("📩 webhook /whatsapp-incoming recibido")
     from_number = request.values.get('From', '').replace('whatsapp:', '')
-    incoming_msg = request.values.get('Body', '').strip().lower()
+    incoming_msg = request.values.get('Body', '').strip().lower()  # normalizo a minúsculas
 
     button_id = None
     if request.is_json:
@@ -150,11 +150,11 @@ def whatsapp_incoming():
         print(f"📨 Mensaje recibido: {incoming_msg} desde {from_number}")
 
     if button_id == 'respuesta_si':
-        respuesta = 'SI, ACEPTO'
+        respuesta = 'si, acepto'  # en minúsculas para consistencia
     elif button_id == 'respuesta_no':
         respuesta = 'no'
     else:
-        if incoming_msg not in ['SI, ACEPTO', 'sí', 'no']:
+        if incoming_msg not in ['si, acepto', 'sí', 'no']:  # minúsculas aquí también
             return "⚠️ Por favor, responde solo con SÍ o NO.", 200
         respuesta = incoming_msg
 
@@ -178,7 +178,7 @@ def whatsapp_incoming():
 
     sesion_id, celular_cliente, comuna_id = row
 
-    if respuesta == 'SI, ACEPTO':
+    if respuesta == 'si, acepto':  # comparación en minúsculas
         cur.execute("SELECT nombre FROM comunas WHERE id = %s", (comuna_id,))
         comuna_nombre = cur.fetchone()[0]
 
@@ -209,6 +209,7 @@ def whatsapp_incoming():
 
     cur.close()
     conn.close()
+    return "✅ Respuesta procesada correctamente.", 200
     return "✅ Respuesta procesada correctamente.", 200
 
 if __name__ == "__main__":
