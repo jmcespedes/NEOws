@@ -134,6 +134,8 @@ def test_enviar():
 
 @app.route('/whatsapp-incoming', methods=['POST'])
 def whatsapp_incoming():
+
+    print("📩 webhook /whatsapp-incoming recibido")
     from_number = request.values.get('From', '').replace('whatsapp:', '')
     incoming_msg = request.values.get('Body', '').strip().lower()
 
