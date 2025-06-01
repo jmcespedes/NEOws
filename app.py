@@ -137,6 +137,11 @@ def test_enviar():
 def whatsapp_incoming():
     try:
         print("📩 webhook /whatsapp-incoming recibido")
+        print("📩 webhook /whatsapp-incoming recibido")
+        print("📩 webhook /whatsapp-incoming recibido")
+        print("📩 webhook /whatsapp-incoming recibido")
+        print("📩 webhook /whatsapp-incoming recibido")
+        
         from_number = request.values.get('From', '').replace('whatsapp:', '')
         incoming_msg = request.values.get('Body', '').strip().lower()  # normalizo a minúsculas
 
