@@ -38,7 +38,7 @@ def enviar_mensaje_plantilla(to_whatsapp_number, comuna, servicio, pregunta_clie
         "1": servicio,
         "2": comuna,
         "3": pregunta_cliente,
-        "4": "NEOServicios"
+        "4": "NEOServicios"}
     payload = {
         'To': to_whatsapp_number,
         'From': f'whatsapp:{TWILIO_WHATSAPP}',
