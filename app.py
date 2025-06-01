@@ -133,10 +133,6 @@ def test_enviar():
     return "✅ Envío ejecutado manualmente"
 
 
-@app.route('/whatsapp-incoming', methods=['GET'])
-def whatsapp_incoming_get():
-    return "GET recibido en /whatsapp-incoming", 200
-
 @app.route('/whatsapp-incoming', methods=['POST'])
 def whatsapp_incoming():
     try:
