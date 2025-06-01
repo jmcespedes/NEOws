@@ -22,7 +22,7 @@ DB_CONFIG = {
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP = f"{os.getenv('TWILIO_PHONE_NUMBER')}"
-TWILIO_CONTENT_SID = os.getenv("TWILIO_CONTENT_SID")  # Agrega esta variable en tu env
+TWILIO_CONTENT_SID = os.getenv("TWILIO_CONTENT_SID")  # Agrega esta variable en tu entorno
 
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
@@ -40,7 +40,7 @@ def enviar_mensaje_plantilla(to_whatsapp_number):
     }
     try:
         response = requests.post(url, data=payload, auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH))
-        if response.status_code == 201 or response.status_code == 200:
+        if response.status_code in [200, 201]:
             print(f"✅ Mensaje plantilla enviado a {to_whatsapp_number}")
             return True
         else:
@@ -96,7 +96,6 @@ def enviar_mensajes_pendientes():
                 continue
 
             for nombre_prov, telefono, nombre_servicio in proveedores:
-                # Enviar mensaje plantilla en vez de texto libre
                 to_whatsapp = f"whatsapp:{telefono}"
                 exito = enviar_mensaje_plantilla(to_whatsapp)
                 if not exito:
@@ -120,26 +119,39 @@ def enviar_mensajes_pendientes():
 def index():
     return "Bot de envío activo."
 
-@app.route('/test-enviar')  # Corregido: Agregada la ruta
+@app.route('/test-enviar')
 def test_enviar():
-    print("Ejecutando envío manual...")  # Agregado log
+    print("Ejecutando envío manual...")
     enviar_mensajes_pendientes()
     return "✅ Envío ejecutado manualmente"
 
 @app.route('/whatsapp-incoming', methods=['POST'])
 def whatsapp_incoming():
-    incoming_msg = request.values.get('Body', '').strip().lower()
     from_number = request.values.get('From', '').replace('whatsapp:', '')
+    incoming_msg = request.values.get('Body', '').strip().lower()
 
-    print(f"📨 Mensaje recibido: {incoming_msg} desde {from_number}")
+    button_id = None
+    if request.is_json:
+        data = request.get_json()
+        interactive = data.get('Interactive')
+        if interactive and interactive.get('Type') == 'button_reply':
+            button_id = interactive['ButtonReply']['Id']
+            print(f"📨 Botón presionado: {button_id} desde {from_number}")
+    else:
+        print(f"📨 Mensaje recibido: {incoming_msg} desde {from_number}")
 
-    if incoming_msg not in ['si', 'sí', 'no']:
-        return "⚠️ Por favor, responde solo con SÍ o NO.", 200
+    if button_id == 'respuesta_si':
+        respuesta = 'si'
+    elif button_id == 'respuesta_no':
+        respuesta = 'no'
+    else:
+        if incoming_msg not in ['si', 'sí', 'no']:
+            return "⚠️ Por favor, responde solo con SÍ o NO.", 200
+        respuesta = incoming_msg
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Buscar la sesión pendiente del proveedor
     cur.execute("""
         SELECT sesion_id, celular, comuna_id
         FROM envios_whatsapp
@@ -157,12 +169,10 @@ def whatsapp_incoming():
 
     sesion_id, celular_cliente, comuna_id = row
 
-    if incoming_msg in ['si', 'sí']:
-        # Obtener comuna
+    if respuesta == 'si':
         cur.execute("SELECT nombre FROM comunas WHERE id = %s", (comuna_id,))
         comuna_nombre = cur.fetchone()[0]
 
-        # Enviar mensaje al proveedor con datos del cliente
         mensaje_contacto = (
             f"✅ Gracias por aceptar. Aquí están los datos del cliente, por favor contactalo lo antes posible:\n"
             f"📍 Comuna: {comuna_nombre}\n📞 Contacto: {celular_cliente}"
@@ -177,7 +187,6 @@ def whatsapp_incoming():
         except Exception as e:
             print(f"❌ Error al enviar datos de cliente: {e}")
 
-        # Actualizar en base de datos
         cur.execute("""
             UPDATE envios_whatsapp
             SET proveedor_acepta = 'SI',
@@ -186,7 +195,7 @@ def whatsapp_incoming():
         """, (from_number, sesion_id))
         conn.commit()
 
-    elif incoming_msg == 'no':
+    elif respuesta == 'no':
         print("🚫 Proveedor no aceptó la solicitud.")
 
     cur.close()
