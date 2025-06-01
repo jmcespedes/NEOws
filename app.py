@@ -35,10 +35,10 @@ def get_db_connection():
 def enviar_mensaje_plantilla(to_whatsapp_number, comuna, servicio, pregunta_cliente):
     url = f'https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json'
     content_variables = {
-        "1": comuna,
-        "2": servicio,
-        "3": pregunta_cliente
-    }
+        "1": servicio,
+        "2": comuna,
+        "3": pregunta_cliente,
+        "4": "NEOServicios"
     payload = {
         'To': to_whatsapp_number,
         'From': f'whatsapp:{TWILIO_WHATSAPP}',
@@ -148,11 +148,11 @@ def whatsapp_incoming():
         print(f"📨 Mensaje recibido: {incoming_msg} desde {from_number}")
 
     if button_id == 'respuesta_si':
-        respuesta = 'si'
+        respuesta = 'SI, ACEPTO'
     elif button_id == 'respuesta_no':
         respuesta = 'no'
     else:
-        if incoming_msg not in ['si', 'sí', 'no']:
+        if incoming_msg not in ['SI, ACEPTO', 'sí', 'no']:
             return "⚠️ Por favor, responde solo con SÍ o NO.", 200
         respuesta = incoming_msg
 
@@ -176,7 +176,7 @@ def whatsapp_incoming():
 
     sesion_id, celular_cliente, comuna_id = row
 
-    if respuesta == 'si':
+    if respuesta == 'SI, ACEPTO':
         cur.execute("SELECT nombre FROM comunas WHERE id = %s", (comuna_id,))
         comuna_nombre = cur.fetchone()[0]
 
