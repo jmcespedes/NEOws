@@ -6,6 +6,7 @@ from flask import Flask, request
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 from requests.auth import HTTPBasicAuth
+import json
 
 load_dotenv()
 
@@ -31,12 +32,18 @@ def get_db_connection():
     print("✅ Conexión a la base de datos establecida.")
     return conn
 
-def enviar_mensaje_plantilla(to_whatsapp_number):
+def enviar_mensaje_plantilla(to_whatsapp_number, comuna, servicio, pregunta_cliente):
     url = f'https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json'
+    content_variables = {
+        "1": comuna,
+        "2": servicio,
+        "3": pregunta_cliente
+    }
     payload = {
         'To': to_whatsapp_number,
         'From': f'whatsapp:{TWILIO_WHATSAPP}',
-        'ContentSid': TWILIO_CONTENT_SID
+        'ContentSid': TWILIO_CONTENT_SID,
+        'ContentVariables': json.dumps(content_variables)
     }
     try:
         response = requests.post(url, data=payload, auth=HTTPBasicAuth(TWILIO_SID, TWILIO_AUTH))
@@ -95,9 +102,9 @@ def enviar_mensajes_pendientes():
                 print(f"⚠️ No hay proveedores en {comuna_nombre} para el servicio {servicio_id}")
                 continue
 
-            for nombre_prov, telefono, nombre_servicio in proveedores:
+            for nombre, telefono, nombre_servicio in proveedores:
                 to_whatsapp = f"whatsapp:{telefono}"
-                exito = enviar_mensaje_plantilla(to_whatsapp)
+                exito = enviar_mensaje_plantilla(to_whatsapp, comuna_nombre, nombre_servicio, pregunta_cliente)
                 if not exito:
                     print(f"❌ No se pudo enviar plantilla a {telefono}")
 
